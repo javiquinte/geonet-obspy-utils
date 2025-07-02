@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+The geonet_obspy_utils.clients.fdsn.client test suite.
+"""
+
+
 from obspy import UTCDateTime
 from geonet_obspy_utils.clients.aws.client import Client  # Assuming this is your custom AWSClient wrapper
 
