@@ -1,3 +1,34 @@
+<<<<<<< HEAD
 # gitignore
 #
 # Reference: https://git-scm.com/docs/gitignore
+=======
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Ignore Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Ignore virtual environments
+venv/
+.env/
+.envrc/
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Ignore Jupyter Notebook checkpoints (if any)
+.ipynb_checkpoints/
+
+# Ignore IDE/editor settings
+.vscode/
+.idea/
+>>>>>>> ef460b9 (Added files)

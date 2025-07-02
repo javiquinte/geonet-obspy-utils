@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geonet_obspy_utils"
+version = "0.1.0"
+description = "AWS S3 waveform client for GeoNet"
+authors = [{ name = "Pasan Herath", email = "p.herath@gns.cri.nz" }]
+dependencies = [
+    "obspy",
+    "boto3",
+    "pyyaml",
+    "mseedlib",
+    "numpy",
+    "pytest",
+    "pandas",
+    "tqdm"   
+]
+requires-python = ">=3.8"
+
+
+[tool.setuptools]
+packages = ["geonet_obspy_utils", "geonet_obspy_utils.clients", "geonet_obspy_utils.clients.aws"]
+
+[tool.setuptools.package-data]
+"geonet_obspy_utils.clients.aws" = ["client_config.yml"]
