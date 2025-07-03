@@ -24,7 +24,7 @@ p.herath @gns.cri.nz
 
 ```
 # import the libraries
-from obspy import UTCDateTime, read_events
+from obspy import UTCDateTime
 from geonet_obspy_utils.clients.aws.client import Client
 
 # initialize client
