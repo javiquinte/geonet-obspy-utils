@@ -146,14 +146,14 @@ class Client:
                 
             current_time += 86400  # Move to the next day
         
-        st.merge()
+        
         st.trim(starttime, endtime)
         
         if len(st) > 0: 
             return st
         
         else:
-            raise IndexError ("No waveforms found")
+            raise IndexError ("No waveforms found!")
                 
 
     
