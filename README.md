@@ -39,8 +39,8 @@ stream = client.get_waveforms(network = "NZ",
                               station = "DCZ", 
                               location = "*", 
                               channel = "HH*", 
-                               starttime, 
-                               endtime, 
+                               starttime = starttime, 
+                               endtime = endtime, 
                                max_threads=4)
 
 print (stream)
@@ -57,3 +57,4 @@ cat = client.get_events(starttime, endtime)
 print (cat)
 
 ```
+
