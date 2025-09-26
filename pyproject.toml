@@ -15,7 +15,7 @@ dependencies = [
     "numpy",
     "pytest",
     "pandas",
-    "tqdm"   
+    "parse"   
 ]
 requires-python = ">=3.8"
 

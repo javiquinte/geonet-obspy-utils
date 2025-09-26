@@ -14,13 +14,15 @@ import os
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from mseedlib import MSTraceList, sourceid2nslc
 import numpy as np
 from  concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import requests
 from io import StringIO, BytesIO
-from tqdm import tqdm
+from parse import parse
+
 
 
 
@@ -123,7 +125,6 @@ class Client:
             available_files = self._list_available_files(prefix)
             ## Filter based on wildcards using match_wildcard
             matching_files = [f for f in available_files if _match_wildcard(object_key_pattern, f)]
-            
             if len (matching_files) <1:
                 raise IndexError ("No matching waveform file(s) found in the bucket. Please check your input parameters. ")
             
@@ -140,7 +141,7 @@ class Client:
             
             with ThreadPoolExecutor(max_workers=max_threads) as executor:
                 futures = [executor.submit(download_file, f) for f in matching_files]
-                for future in tqdm(as_completed(futures), total=len(futures), desc="Downloading waveforms", position=2):
+                for future in as_completed(futures):
                     day_st = future.result()
                     st += day_st
                 
@@ -179,7 +180,7 @@ class Client:
         if max_threads > 1:
             with ThreadPoolExecutor(max_workers=max_threads) as executor:
                 results = {executor.submit(download_event, event_id): event_id for event_id in event_ids}
-                for event in tqdm(as_completed(results), total=len(results), desc="Downloading events", position=1):
+                for event in as_completed(results):
                     event_id = results[event]
                     data = event.result()
                     ev_list.append(data)
@@ -190,6 +191,43 @@ class Client:
         cat = Catalog(ev_list)
         
         return cat
+    
+    def read(self, fname):
+        
+        '''
+        Function to read mseed file by giving filename
+        No wildcards are supported here.
+        '''
+        mseed_stats = _parse_mseed_filename(fname, self.mseed_file_format)
+        # # Generate object key pattern
+        filename = self.waveform_dir + \
+                                 self.year_day_format.format(year = mseed_stats["year"], 
+                                                             day_of_year = mseed_stats["day_of_year"], 
+                                                             network = mseed_stats["network"]) + \
+                                 self.mseed_file_format.format(network = mseed_stats["network"], 
+                                                               station = mseed_stats["station"], 
+                                                               location = mseed_stats["location"], 
+                                                               channel = mseed_stats["channel"], 
+                                                               year = mseed_stats["year"], 
+                                                               day_of_year = mseed_stats["day_of_year"])
+
+                               
+        try:
+            bin_obj = self._s3_waveform.Object(filename).get()["Body"].read()
+            mstl = MSTraceList()
+            with tempfile.NamedTemporaryFile(delete=True) as tmp:
+                tmp.write(bin_obj)
+                tmp.flush()
+                mstl.read_file(tmp.name, unpack_data=True, record_list=True)
+        
+            return _fix_mseed_timing(mstl.traceids())
+        
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            if error_code == "NoSuchKey":
+                raise FileNotFoundError(f"File '{filename}' not found in S3 bucket.") from e
+            else:
+                raise RuntimeError(f"Error fetching file '{filename}' from S3: {e}") from e
 
 
 def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
@@ -231,8 +269,6 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
         if "bbox" in kwargs and isinstance(kwargs["bbox"], list) and len(kwargs["bbox"]) == 4:
             bbox_str = ",".join(map(str, kwargs["bbox"]))
             url += f"&bbox={bbox_str}"
-
-        # print(f"Fetching data from {start} to {end} with URL: {url}")
 
         response = requests.get(url)
         if response.status_code == 200:
@@ -287,3 +323,11 @@ def _match_wildcard(pattern, filename):
     
     # print(f"Pattern: {pattern}, Filename: {filename}")  # Debugging
     return fnmatch.fnmatch(filename, pattern)
+
+
+def _parse_mseed_filename(filename, mseed_format):
+    
+    result = parse(mseed_format, filename)
+    if not result:
+        raise ValueError(f"Filename does not match format: {filename}")
+    return result.named

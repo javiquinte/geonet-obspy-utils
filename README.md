@@ -34,7 +34,7 @@ client = Client("GEONET")
 starttime = UTCDateTime("2024-03-20T16:59:00")
 endtime = UTCDateTime("2024-03-20T18:05:00")
 
-# request stream
+# request stream by querying
 stream = client.get_waveforms(network = "NZ", 
                               station = "DCZ", 
                               location = "*", 
@@ -44,6 +44,12 @@ stream = client.get_waveforms(network = "NZ",
                                max_threads=4)
 
 print (stream)
+
+# request stream by filename
+
+fname = "DCZ.NZ/2023.125.DCZ.10-HHZ.NZ.D"
+f = client.read(fname)
+print (f)
 
 # request events
 cat = client.get_events(starttime, endtime)

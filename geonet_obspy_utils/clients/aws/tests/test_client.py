@@ -12,7 +12,8 @@ from geonet_obspy_utils.clients.aws.client import Client  # Assuming this is you
 def test_geonet_waveform_download():
     
     client = Client("GEONET")
-
+    
+    # waveform query
     starttime = UTCDateTime("2024-03-20T16:59:00")
     endtime = UTCDateTime("2024-03-20T18:05:00")
 
@@ -21,6 +22,14 @@ def test_geonet_waveform_download():
     assert len(stream) > 0, "No waveforms were returned from GeoNet AWS client."
 
 
+
+
+    #file query
+    fname = "DCZ.NZ/2023.125.DCZ.10-HHZ.NZ.D"
+
+    f = client.read(fname)
+    assert len(f) > 0, "No files were returned from GeoNet AWS client."
+    
     ################ Test waveforms and picks ################
     # event_xml_files = [
     #                '/scratch/pasanh/S3_MSEED_ISSUE/event_xmls/2024p215431.xml',
@@ -72,15 +81,15 @@ def test_scedc_waveform_download():
     
     client = Client("SCEDC")
 
+    #waveform query
     starttime = UTCDateTime("2024-03-20T16:59:00")
     endtime = UTCDateTime("2024-03-20T18:05:00")
 
-
     stream = client.get_waveforms("CI", "ABL", "*", "?Z",
                                                starttime, endtime, max_threads=4)
-
     assert len(stream) > 0, "No waveforms were returned from SCEDC AWS client."
 
+ 
 
 def test_geoent_event_download():
     
