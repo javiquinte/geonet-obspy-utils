@@ -113,18 +113,31 @@ class Client:
             day_of_year = current_time.julday
             
             # Generate object key pattern
-            object_key_pattern = self.waveform_dir + \
-                                 self.year_day_format.format(year=year, day_of_year=day_of_year, network=network) + \
-                                 self.mseed_file_format.format(network=network, station=station, location=location, 
-                                                               channel=channel, year=year, day_of_year=day_of_year)
-       
-            # Format the prefix with the current year and day_of_year
-            prefix = self.waveform_dir + self.year_day_format.format(year=year, day_of_year=day_of_year, network=network)
+            networks = [net.strip() for net in network.split(",")]
+            stations = [st.strip() for st in station.split(",")]
+            locs = [loc.strip() for loc in location.split(",")]
+            channels = [ch.strip() for ch in channel.split(",")]
+            
+            print (networks, stations, locs, channels)
+            matching_files = []
+            for net in networks:
+                # Format the prefix with the current year and day_of_year
+                prefix = self.waveform_dir + self.year_day_format.format(year=year, day_of_year=day_of_year, network=net)
+                # List available files matching the prefix in the bucket
+                available_files = self._list_available_files(prefix)
+                for sta in stations:
+                    for loc in locs:
+                        for ch in channels:
+                            
+                            object_key_pattern = self.waveform_dir + \
+                                 self.year_day_format.format(year=year, day_of_year=day_of_year, network=net) + \
+                                 self.mseed_file_format.format(network=net, station=sta, location=loc, 
+                                                               channel=ch, year=year, day_of_year=day_of_year)
+            
 
-            # List available files matching the prefix in the bucket
-            available_files = self._list_available_files(prefix)
-            ## Filter based on wildcards using match_wildcard
-            matching_files = [f for f in available_files if _match_wildcard(object_key_pattern, f)]
+                            print (object_key_pattern)
+                            ## Filter based on wildcards using match_wildcard
+                            matching_files += [f for f in available_files if _match_wildcard(object_key_pattern, f)]
             if len (matching_files) <1:
                 raise IndexError ("No matching waveform file(s) found in the bucket. Please check your input parameters. ")
             

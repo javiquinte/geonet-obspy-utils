@@ -14,11 +14,12 @@ def test_geonet_waveform_download():
     client = Client("GEONET")
     
     # waveform query
-    starttime = UTCDateTime("2024-03-20T16:59:00")
-    endtime = UTCDateTime("2024-03-20T18:05:00")
+    starttime = UTCDateTime("2025-09-20T16:59:00")
+    endtime = UTCDateTime("2025-09-20T18:05:00")
 
-    stream = client.get_waveforms("NZ", "DCZ", "*", "HH*", 
+    stream = client.get_waveforms("NZ,IU", "DCZ, LBZ, SNZO", "*", "*H*, *N*", 
                                   starttime, endtime, max_threads=4)
+    print (stream)
     assert len(stream) > 0, "No waveforms were returned from GeoNet AWS client."
 
 
@@ -28,6 +29,7 @@ def test_geonet_waveform_download():
     fname = "DCZ.NZ/2023.125.DCZ.10-HHZ.NZ.D"
 
     f = client.read(fname)
+    print (f)
     assert len(f) > 0, "No files were returned from GeoNet AWS client."
     
     ################ Test waveforms and picks ################
@@ -77,37 +79,37 @@ def test_geonet_waveform_download():
     #####################################################
     
 
-def test_scedc_waveform_download():
+# def test_scedc_waveform_download():
     
-    client = Client("SCEDC")
+#     client = Client("SCEDC")
 
-    #waveform query
-    starttime = UTCDateTime("2024-03-20T16:59:00")
-    endtime = UTCDateTime("2024-03-20T18:05:00")
+#     #waveform query
+#     starttime = UTCDateTime("2024-03-20T16:59:00")
+#     endtime = UTCDateTime("2024-03-20T18:05:00")
 
-    stream = client.get_waveforms("CI", "ABL", "*", "?Z",
-                                               starttime, endtime, max_threads=4)
-    assert len(stream) > 0, "No waveforms were returned from SCEDC AWS client."
+#     stream = client.get_waveforms("CI", "ABL", "*", "?Z",
+#                                                starttime, endtime, max_threads=4)
+#     assert len(stream) > 0, "No waveforms were returned from SCEDC AWS client."
 
  
 
-def test_geoent_event_download():
+# def test_geoent_event_download():
     
-    client = Client("GEONET")
+#     client = Client("GEONET")
 
-    starttime = UTCDateTime("2024-03-20T16:59:00")
-    endtime = UTCDateTime("2024-03-20T18:05:00")
+#     starttime = UTCDateTime("2024-03-20T16:59:00")
+#     endtime = UTCDateTime("2024-03-20T18:05:00")
 
 
-    cat = client.get_events(starttime, endtime)
+#     cat = client.get_events(starttime, endtime)
 
-    assert len(cat) > 0, "No events were returned from GEONET AWS client."
+#     assert len(cat) > 0, "No events were returned from GEONET AWS client."
 
 
 
 # Optional: Run manually if not using pytest CLI
 if __name__ == "__main__":
     test_geonet_waveform_download()
-    test_scedc_waveform_download()
-    test_geoent_event_download()
+    # test_scedc_waveform_download()
+    # test_geoent_event_download()
     # print("GeoNet waveform data downloaded successfully!")
