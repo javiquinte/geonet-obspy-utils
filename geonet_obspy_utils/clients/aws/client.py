@@ -2,229 +2,457 @@
 # -*- coding: utf-8 -*-
 """
 GeoNet AWS  client for ObsPy.
-
 """
 
 
 from obspy import UTCDateTime, Stream, Trace, read_events, Catalog
 import fnmatch
-import tempfile 
+import tempfile
 import yaml
-import os 
+import os
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from mseedlib import MSTraceList, sourceid2nslc
 import numpy as np
-from  concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import requests
 from io import StringIO, BytesIO
 from parse import parse
+from itertools import product
 
 
+class Client(object):
+    """
+    AWS Client to access waveform (all available clients) and event
+    (only for GeoNet) data.
+    """
 
-
-class Client:
-    def __init__(self, base_name):
+    def __init__(self, client_name="GEONET"):
         """
-        Initialize the client with the base configuration loaded from a YAML file.
+        Initialize the client with the  configuration loaded from a YAML file.
+
+        The YAML file (client_config.yml) contains configurations for different
+        clients. New clients can be added by adding their configurations to the
+        YAML file.
+
+        >>> client = Client("GEONET")
+        >>> print (client)
+
+        :type client_name: str
+        :param client_name: Name of the client to initialize. Must match a key
+            in the YAML config file.
+
         """
-        config_path = os.path.join(os.path.dirname(__file__), "client_config.yml")
+
+        config_path = os.path.join(os.path.dirname(__file__),
+                                   "client_config.yml")
+
         with open(config_path, 'r') as f:
             base_config = yaml.safe_load(f)
 
-        if base_name.upper() in base_config:
-            self.config = base_config[base_name.upper()]
+        if client_name.upper() in base_config:
+            self.config = base_config[client_name.upper()]
         else:
-            raise ValueError(f"Unknown base name: {base_name}")
-        
+            raise ValueError(f"Unknown base name: {client_name}")
+
         self.waveform_bucket_name = self.config["waveform_bucket_name"]
         self.event_bucket_name = self.config["event_bucket_name"]
         self.base_url = self.config["base_url"]
         self.waveform_dir = self.config["waveform_dir"]
         self.year_day_format = self.config["year_day_format"]
         self.mseed_file_format = self.config["mseed_file_format"]
-    
+
     @property
     def _s3(self):
+        """
+        To enable instantiation for individual threads.
+        """
         return boto3.client("s3", config=Config(signature_version=UNSIGNED))
 
     @property
     def _s3_waveform(self):
-        """ S3 access as property to enforce instantiation for individual threads. """
-        waveform_bob = boto3.resource('s3', config=Config(signature_version=UNSIGNED))
+        """
+        S3 access as property to enforce instantiation for individual
+        threads.
+        """
+        waveform_bob = boto3.resource(
+            's3',
+            config=Config(signature_version=UNSIGNED))
+
         return waveform_bob.Bucket(self.waveform_bucket_name)
-    
+
     @property
     def _s3_event(self):
-        """ S3 access as property to enforce instantiation for individual threads. """
-        event_bob = boto3.resource('s3', config=Config(signature_version=UNSIGNED))
-        return event_bob.Bucket(self.event_bucket_name)
+        """
+        S3 access as property to enforce instantiation for individual threads.
+        Only applies to GeoNet for now.
+        """
+        event_bob = boto3.resource(
+            's3',
+            config=Config(signature_version=UNSIGNED))
 
+        return event_bob.Bucket(self.event_bucket_name)
 
     def _list_available_files(self, prefix):
         """
         List files under the given prefix using boto3 and anonymous access.
         """
         file_list = []
-        # self._s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))  # client, not resource
+
         paginator = self._s3.get_paginator('list_objects_v2')
         try:
-            for page in paginator.paginate(Bucket=self.waveform_bucket_name, Prefix=prefix):
+            for page in paginator.paginate(Bucket=self.waveform_bucket_name,
+                                           Prefix=prefix):
                 contents = page.get("Contents", [])
-                
+
                 file_list.extend([item["Key"] for item in contents])
         except self._s3.exceptions.NoSuchBucket:
             print(f"Bucket '{self.waveform_bucket_name}' does not exist.")
         except Exception as e:
             print(f"Error accessing S3 bucket '{self.bucket_name}': {e}")
         return file_list
-    
-    
-    
-    def get_waveforms(self, network, station, location, channel, starttime, endtime, max_threads=1):
+
+    def get_waveforms(self, network, station, location, channel, starttime,
+                      endtime, filename=None, max_threads=1):
         """
-        Fetch MiniSEED waveform data from the given source within the specified time range.
+        Fetch MiniSEED waveform data from AWS S3 bucket.
 
-        Parameters:
-        - network (str): Network code. Supports wildcards '*' (any number of characters) 
-                         and '?' (single character).
-        - station (str): Station code. Supports wildcards '*' and '?'.
-        - location (str): Location code. Supports wildcards '*' and '?'.
-        - channel (str): Channel code. Supports wildcards '*' and '?'.
-        - starttime (UTCDateTime): Start time of the waveform data.
-        - endtime (UTCDateTime): End time of the waveform data.
+        >>> client = Client("GEONET")
+        >>> t1 = UTCDateTime("2024-03-20T16:59:00")
+        >>> t2 = UTCDateTime("2024-03-20T18:05:00")
+        >>> st = client.get_waveforms("NZ", "DCZ", "10", "LHZ", t1, t2)
+        >>> print(st)
+        1 Trace(s) in Stream:
+        NZ.DCZ.10.LHZ | 2025-09-20T16:59:00.000000Z - .. | 1.0 Hz, 3961 samples
 
-        Returns:
-        - Stream: An ObsPy Stream object containing the waveform data.
+        The service can deal with UNIX style wildcards.
 
-        Raises:
-        - ValueError: If starttime or endtime is not an instance of obspy.UTCDateTime.
+        >>> st = client.get_waveforms("NZ,IU", "DCZ, ?", "*", "HH*", t1, t2)
+        >>> print(st)
+        6 Trace(s) in Stream:
+        NZ.DCZ.10.HHN  | 2025-09-20T16:59:00.0Z - .. | 100.0 Hz, 396001 samples
+        NZ.DCZ.10.HHE  | 2025-09-20T16:59:00.0Z - .. | 100.0 Hz, 396001 samples
+        IU.SNZO.00.HH1 | 2025-09-20T16:58:59.0Z - .. | 100.0 Hz, 396001 samples
+        IU.SNZO.00.HHZ | 2025-09-20T16:58:59.0Z - .. | 100.0 Hz, 396001 samples
+        IU.SNZO.00.HH2 | 2025-09-20T16:58:59.0Z - .. | 100.0 Hz, 396001 samples
+        NZ.DCZ.10.HHZ  | 2025-09-20T16:59:00.0Z - .. | 100.0 Hz, 396001 samples
+
+        :type network: str
+        :param network: Select one or more network codes. Can be SEED network
+            codes or data center defined codes. Multiple codes are
+            comma-separated (e.g. ``"NZ,IU"``). Wildcards are allowed.
+        :type station: str
+        :param station: Select one or more SEED station codes. Multiple codes
+            are comma-separated (e.g. ``"LBZ,SNZO"``). Wildcards are allowed.
+        :type location: str
+        :param location: Select one or more SEED location identifiers. Multiple
+            identifiers are comma-separated (e.g. ``"00,01"``). Wildcards are
+            allowed.
+        :type channel: str
+        :param channel: Select one or more SEED channel codes. Multiple codes
+            are comma-separated (e.g. ``"BHZ,HHZ"``).
+        :type starttime: :class:`~obspy.core.utcdatetime.UTCDateTime`
+        :param starttime: Limit results to time series samples on or after the
+            specified start time
+        :type endtime: :class:`~obspy.core.utcdatetime.UTCDateTime`
+        :param endtime: Limit results to time series samples on or before the
+            specified end time
+        :type filename: str or file
+        :param filename: If given, the downloaded data will be saved there
+            instead of being parsed to an ObsPy object. Thus it will contain
+            the raw data from the webservices.
         """
-        if not isinstance(starttime, UTCDateTime) or not isinstance(endtime, UTCDateTime):
-            raise ValueError("starttime and endtime must be obspy.UTCDateTime objects")
+
+        if (not isinstance(starttime, UTCDateTime) or
+                not isinstance(endtime, UTCDateTime)):
+            raise ValueError("starttime and endtime must be" +
+                             " obspy.UTCDateTime objects")
 
         st = Stream()
         current_time = starttime
+
+        # Create all combinations of network, station, location, and channel
+        nets = [net.strip() for net in network.split(",")]
+        stas = [st.strip() for st in station.split(",")]
+        locs = [loc.strip() for loc in location.split(",")]
+        chans = [ch.strip() for ch in channel.split(",")]
+
+        # Cartesian product
+        groups = [{"network": n, "station": s, "location": l, "channel": c}
+                  for n, s, l, c in product(nets, stas, locs, chans)]
+
+        matching_files = []
+
         while current_time <= endtime:
             year = current_time.year
             day_of_year = current_time.julday
-            
-            # Generate object key pattern
-            networks = [net.strip() for net in network.split(",")]
-            stations = [st.strip() for st in station.split(",")]
-            locs = [loc.strip() for loc in location.split(",")]
-            channels = [ch.strip() for ch in channel.split(",")]
-            
-            print (networks, stations, locs, channels)
-            matching_files = []
-            for net in networks:
+
+            for group in groups:
                 # Format the prefix with the current year and day_of_year
-                prefix = self.waveform_dir + self.year_day_format.format(year=year, day_of_year=day_of_year, network=net)
+                prefix = self.waveform_dir + \
+                    self.year_day_format.format(year=year,
+                                                day_of_year=day_of_year,
+                                                network=group["network"])
+
                 # List available files matching the prefix in the bucket
                 available_files = self._list_available_files(prefix)
-                for sta in stations:
-                    for loc in locs:
-                        for ch in channels:
-                            
-                            object_key_pattern = self.waveform_dir + \
-                                 self.year_day_format.format(year=year, day_of_year=day_of_year, network=net) + \
-                                 self.mseed_file_format.format(network=net, station=sta, location=loc, 
-                                                               channel=ch, year=year, day_of_year=day_of_year)
-            
 
-                            print (object_key_pattern)
-                            ## Filter based on wildcards using match_wildcard
-                            matching_files += [f for f in available_files if _match_wildcard(object_key_pattern, f)]
-            if len (matching_files) <1:
-                raise IndexError ("No matching waveform file(s) found in the bucket. Please check your input parameters. ")
-            
-            ## We use mseedlib here because ObsPy does not apply timing correctly
-            ## when the sampling rate in not uniform with the dataloggers.
-            def download_file(file):
-                bin_obj = self._s3_waveform.Object(file).get()["Body"].read()
-                mstl = MSTraceList()
-                with tempfile.NamedTemporaryFile(delete=True) as tmp:
-                    tmp.write(bin_obj)
-                    tmp.flush()
-                    mstl.read_file(tmp.name, unpack_data=True, record_list=True)
-                return _fix_mseed_timing(mstl.traceids())
-            
-            with ThreadPoolExecutor(max_workers=max_threads) as executor:
-                futures = [executor.submit(download_file, f) for f in matching_files]
-                for future in as_completed(futures):
-                    day_st = future.result()
-                    st += day_st
-                
-            current_time += 86400  # Move to the next day
-        
-        
+                object_key_pattern = (
+                    self.waveform_dir
+                    + self.year_day_format.format(
+                        year=year,
+                        day_of_year=day_of_year,
+                        network=group["network"],
+                    )
+                    + self.mseed_file_format.format(
+                        network=group["network"],
+                        station=group["station"],
+                        location=group["location"],
+                        channel=group["channel"],
+                        year=year,
+                        day_of_year=day_of_year,
+                    )
+                )
+
+                # Filter based on wildcards using match_wildcard
+                matching_files += [f for f in available_files
+                                   if _match_wildcard(object_key_pattern, f)]
+
+            # Move to the next day
+            secs_to_next_day = 86400 - (current_time.ns -
+                                        UTCDateTime(current_time.year,
+                                                    current_time.month,
+                                                    current_time.day).ns)/1e9
+
+            current_time += secs_to_next_day  # Move to the next day
+
+        if len(matching_files) < 1:
+            raise IndexError("No matching waveform file(s) found in the" +
+                             "bucket. Please check your input parameters. ")
+
+        # We use mseedlib here because ObsPy does not apply timing correctly
+        # when the sampling rate is not uniform with the dataloggers.
+        def download_file(file):
+            bin_obj = self._s3_waveform.Object(file).get()["Body"].read()
+            mstl = MSTraceList()
+            with tempfile.NamedTemporaryFile(delete=True) as tmp:
+                tmp.write(bin_obj)
+                tmp.flush()
+                mstl.read_file(tmp.name, unpack_data=True, record_list=True)
+            return _fix_mseed_timing(mstl.traceids())
+
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            futures = [executor.submit(download_file, f)
+                       for f in matching_files]
+            for future in as_completed(futures):
+                day_st = future.result()
+                st += day_st
+
         st.trim(starttime, endtime)
-        
-        if len(st) > 0: 
-            return st
-        
-        else:
-            raise IndexError ("No waveforms found!")
-                
 
-    
-    
-    def get_events(self, starttime, endtime,  max_threads=1, **kwargs):
-        # Fetch earthquake data
-        
-        event_data = _fetch_geonet_earthquake_data(starttime, endtime, **kwargs)
-        
-        if event_data is None:
-
-            return Catalog()
-
-        # Initialize catalog
-        cat = Catalog()
-        event_ids = event_data.tolist()  # Ensure this matches the actual data structure
-        def download_event(eventid, max_retries=2):
-            bin_obj = self._s3_event.Object(eventid+".xml").get()['Body'].read()
-            event_obj = read_events(BytesIO(bin_obj))[0]
-            return event_obj
-
-        ev_list = []
-        if max_threads > 1:
-            with ThreadPoolExecutor(max_workers=max_threads) as executor:
-                results = {executor.submit(download_event, event_id): event_id for event_id in event_ids}
-                for event in as_completed(results):
-                    event_id = results[event]
-                    data = event.result()
-                    ev_list.append(data)
+        if len(st) > 0:
+            if filename:
+                st.write(filename)
+                return None
+            else:
+                return st
 
         else:
-            ev_list = [download_event(event_id) for event_id in event_ids]
-        
-        cat = Catalog(ev_list)
-        
-        return cat
-    
+            raise IndexError("No waveforms found!")
+
+    def get_events(self, starttime=None, endtime=None, eventid=None,
+                   max_threads=1, **kwargs):
+        """
+        Get event information from GeoNet AWS S3 bucket.
+
+        >>> client = Client("GEONET")
+        >>> cat = client.get_events(eventid=609301)
+        >>> print(cat)
+        1 Event(s) in Catalog:
+        1997-10-14T09:53:11.070000Z | -22.145, -176.720 | 7.8 ...
+
+        The return value is a :class:`~obspy.core.event.Catalog` object
+        which can contain any number of events.
+
+        >>> t1 = UTCDateTime("2001-01-07T00:00:00")
+        >>> t2 = UTCDateTime("2001-01-07T03:00:00")
+        >>> cat = client.get_events(starttime=t1, endtime=t2, minmagnitude=4,
+        ...                         catalog="ISC")
+        >>> print(cat)
+        3 Event(s) in Catalog:
+        2001-01-07T02:55:59.290000Z |  +9.801,  +76.548 | 4.9 ...
+        2001-01-07T02:35:35.170000Z | -21.291,  -68.308 | 4.4 ...
+        2001-01-07T00:09:25.630000Z | +22.946, -107.011 | 4.0 ...
+
+        :type starttime: :class:`~obspy.core.utcdatetime.UTCDateTime`, optional
+        :param starttime: Limit to events on or after the specified start time.
+        :type endtime: :class:`~obspy.core.utcdatetime.UTCDateTime`, optional
+        :param endtime: Limit to events on or before the specified end time.
+        :type minlatitude: float, optional
+        :param minlatitude: Limit to events with a latitude larger than the
+            specified minimum.
+        :type maxlatitude: float, optional
+        :param maxlatitude: Limit to events with a latitude smaller than the
+            specified maximum.
+        :type minlongitude: float, optional
+        :param minlongitude: Limit to events with a longitude larger than the
+            specified minimum.
+        :type maxlongitude: float, optional
+        :param maxlongitude: Limit to events with a longitude smaller than the
+            specified maximum.
+        :type latitude: float, optional
+        :param latitude: Specify the latitude to be used for a radius search.
+        :type longitude: float, optional
+        :param longitude: Specify the longitude to be used for a radius
+            search.
+        :type minradius: float, optional
+        :param minradius: Limit to events within the specified minimum number
+            of degrees from the geographic point defined by the latitude and
+            longitude parameters.
+        :type maxradius: float, optional
+        :param maxradius: Limit to events within the specified maximum number
+            of degrees from the geographic point defined by the latitude and
+            longitude parameters.
+        :type mindepth: float, optional
+        :param mindepth: Limit to events with depth, in kilometers, larger than
+            the specified minimum.
+        :type maxdepth: float, optional
+        :param maxdepth: Limit to events with depth, in kilometers, smaller
+            than the specified maximum.
+        :type minmagnitude: float, optional
+        :param minmagnitude: Limit to events with a magnitude larger than the
+            specified minimum.
+        :type maxmagnitude: float, optional
+        :param maxmagnitude: Limit to events with a magnitude smaller than the
+            specified maximum.
+        :type magnitudetype: str, optional
+        :param magnitudetype: Specify a magnitude type to use for testing the
+            minimum and maximum limits.
+        :type eventtype: str, optional
+        :param eventtype: Limit to events with a specified event type.
+            Multiple types are comma-separated (e.g.,
+            ``"earthquake,quarry blast"``). Allowed values are from QuakeML.
+            See :const:`obspy.core.event.header.EventType` for a list of
+            allowed event types.
+        :type includeallorigins: bool, optional
+        :param includeallorigins: Specify if all origins for the event should
+            be included, default is data center dependent but is suggested to
+            be the preferred origin only.
+        :type includeallmagnitudes: bool, optional
+        :param includeallmagnitudes: Specify if all magnitudes for the event
+            should be included, default is data center dependent but is
+            suggested to be the preferred magnitude only.
+        :type includearrivals: bool, optional
+        :param includearrivals: Specify if phase arrivals should be included.
+        :type eventid: str or int, optional
+        :param eventid: Select a specific event by ID; event identifiers are
+            data center specific (String or Integer).
+        :type limit: int, optional
+        :param limit: Limit the results to the specified number of events.
+        :type offset: int, optional
+        :param offset: Return results starting at the event count specified,
+            starting at 1.
+        :type orderby: str, optional
+        :param orderby: Order the result by time or magnitude with the
+            following possibilities:
+
+            * time: order by origin descending time
+            * time-asc: order by origin ascending time
+            * magnitude: order by descending magnitude
+            * magnitude-asc: order by ascending magnitude
+
+        :type catalog: str, optional
+        :param catalog: Limit to events from a specified catalog
+        :type contributor: str, optional
+        :param contributor: Limit to events contributed by a specified
+            contributor.
+        :type updatedafter: :class:`~obspy.core.utcdatetime.UTCDateTime`,
+            optional
+        :param updatedafter: Limit to events updated after the specified time.
+        :type filename: str or file
+        :param filename: If given, the downloaded data will be saved there
+            instead of being parsed to an ObsPy object. Thus it will contain
+            the raw data from the webservices.
+        """
+
+        if eventid:
+            try:
+                bin_obj = self._s3_event.Object(eventid+".xml") \
+                                                .get()['Body'].read()
+                event_obj = read_events(BytesIO(bin_obj))[0]
+                return event_obj
+            except ClientError as e:
+                error_code = e.response["Error"]["Code"]
+                if error_code == "NoSuchKey":
+                    raise FileNotFoundError(f"File '{eventid}' not found in " +
+                                            "S3 bucket.") from e
+
+                else:
+                    raise RuntimeError(f"Error fetching file '{eventid}' " +
+                                       "from S3: {e}") from e
+        else:
+            event_data = _fetch_geonet_earthquake_data(starttime, endtime,
+                                                       **kwargs)
+            if event_data is None:
+                raise ValueError("No events found for the given parameters.")
+
+            # Initialize catalog
+            cat = Catalog()
+
+            event_ids = event_data.tolist()
+
+            def download_event(eventid, max_retries=2):
+                obj = self._s3_event.Object(eventid+".xml").get()
+                bin_obj = obj["Body"].read()
+                event_obj = read_events(BytesIO(bin_obj))[0]
+                return event_obj
+
+            ev_list = []
+            if max_threads > 1:
+                with ThreadPoolExecutor(max_workers=max_threads) as executor:
+                    results = {
+                        executor.submit(download_event, event_id): event_id for
+                        event_id in event_ids}
+
+                    for event in as_completed(results):
+                        # event_id = results[event]
+                        data = event.result()
+                        ev_list.append(data)
+
+            else:
+                ev_list = [download_event(event_id) for event_id in event_ids]
+
+            cat = Catalog(ev_list)
+
+            return cat
+
     def read(self, fname):
-        
-        '''
+        """
         Function to read mseed file by giving filename
         No wildcards are supported here.
-        '''
+        """
         mseed_stats = _parse_mseed_filename(fname, self.mseed_file_format)
         # # Generate object key pattern
-        filename = self.waveform_dir + \
-                                 self.year_day_format.format(year = mseed_stats["year"], 
-                                                             day_of_year = mseed_stats["day_of_year"], 
-                                                             network = mseed_stats["network"]) + \
-                                 self.mseed_file_format.format(network = mseed_stats["network"], 
-                                                               station = mseed_stats["station"], 
-                                                               location = mseed_stats["location"], 
-                                                               channel = mseed_stats["channel"], 
-                                                               year = mseed_stats["year"], 
-                                                               day_of_year = mseed_stats["day_of_year"])
+        filename = (
+            self.waveform_dir
+            + self.year_day_format.format(
+                year=mseed_stats["year"],
+                day_of_year=mseed_stats["day_of_year"],
+                network=mseed_stats["network"],
+            )
+            + self.mseed_file_format.format(
+                network=mseed_stats["network"],
+                station=mseed_stats["station"],
+                location=mseed_stats["location"],
+                channel=mseed_stats["channel"],
+                year=mseed_stats["year"],
+                day_of_year=mseed_stats["day_of_year"],
+            )
+        )
 
-                               
         try:
             bin_obj = self._s3_waveform.Object(filename).get()["Body"].read()
             mstl = MSTraceList()
@@ -232,20 +460,23 @@ class Client:
                 tmp.write(bin_obj)
                 tmp.flush()
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
-        
+
             return _fix_mseed_timing(mstl.traceids())
-        
+
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             if error_code == "NoSuchKey":
-                raise FileNotFoundError(f"File '{filename}' not found in S3 bucket.") from e
+                raise FileNotFoundError(f"File '{filename}' not found in S3" +
+                                        "bucket.") from e
             else:
-                raise RuntimeError(f"Error fetching file '{filename}' from S3: {e}") from e
+                raise RuntimeError(f"Error fetching file '{filename}' from" +
+                                   "S3: {e}") from e
 
 
 def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
-
-
+    """
+    Add dosctring
+    """
     if starttime is None or endtime is None:
         raise ValueError("Both 'starttime' and 'endtime' must be provided.")
 
@@ -257,7 +488,8 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
     if (endtime - starttime) / (86400 * 30) > 6:
         tot_months = (endtime - starttime) / (86400 * 30)
         num_periods = int(tot_months / 6) + 1
-        time_periods = pd.date_range(t1, t2, periods=num_periods, inclusive="both")
+        time_periods = pd.date_range(t1, t2, periods=num_periods,
+                                     inclusive="both")
     else:
         time_periods = pd.date_range(t1, t2, periods=2, inclusive="both")
 
@@ -268,7 +500,10 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
         end = UTCDateTime(time_periods[p + 1])
 
         # Start constructing the URL with the mandatory parameters
-        url = f"https://quakesearch.geonet.org.nz/csv?startdate={start}&enddate={end}"
+        url = (
+            f"https://quakesearch.geonet.org.nz/csv?"
+            f"startdate={start}&enddate={end}"
+        )
 
         # Add optional parameters if provided
         if "minmag" in kwargs:
@@ -279,7 +514,11 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
             url += f"&maxdepth={kwargs['maxdepth']}"
         if "mindepth" in kwargs:
             url += f"&mindepth={kwargs['mindepth']}"
-        if "bbox" in kwargs and isinstance(kwargs["bbox"], list) and len(kwargs["bbox"]) == 4:
+        if (
+            "bbox" in kwargs
+            and isinstance(kwargs["bbox"], list)
+            and len(kwargs["bbox"]) == 4
+        ):
             bbox_str = ",".join(map(str, kwargs["bbox"]))
             url += f"&bbox={bbox_str}"
 
@@ -297,19 +536,19 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
     else:
         print("No data retrieved")
         return None
-    
-    
+
 
 def _fix_mseed_timing(mstl_traceids):
-    
+    """
+    Add docstring
+    """
     stream = Stream()
     for traceid in mstl_traceids:
         for segment in traceid.segments():
-            
             data = np.ctypeslib.as_array(segment.datasamples)
-            # print (UTCDateTime(segment.starttime_str()), UTCDateTime(segment.endtime_str()))
             # compute actual average sampling interval
-            dt = (UTCDateTime(segment.endtime_str()) - UTCDateTime(segment.starttime_str()))/(len(data)-1)
+            dt = (UTCDateTime(segment.endtime_str()) -
+                  UTCDateTime(segment.starttime_str()))/(len(data)-1)
             trace = Trace()
             n, s, l, c = sourceid2nslc(traceid.sourceid)
             trace.data = data
@@ -318,28 +557,31 @@ def _fix_mseed_timing(mstl_traceids):
             trace.stats.location = l
             trace.stats.channel = c
             trace.stats.starttime = UTCDateTime(segment.starttime_str())
-            trace.stats.delta = dt 
-            
-            # print (trace)
+            trace.stats.delta = dt
+
             trace.resample(int(segment.samprate))
             trace.stats.sampling_rate = int(segment.samprate)
-            # print (trace)
+
             stream += trace
-            
+
     return stream
 
 
 def _match_wildcard(pattern, filename):
+    """
+    Add docstring
+    """
     # Replace multiple underscores with a single '*'
-    pattern = pattern.replace("_", "*")  # '?' matches a single character in fnmatch
-    pattern = pattern.replace("?", "*")  # '?' matches a single character in fnmatch
-    
-    # print(f"Pattern: {pattern}, Filename: {filename}")  # Debugging
+    pattern = pattern.replace("_", "*")
+    pattern = pattern.replace("?", "*")
+
     return fnmatch.fnmatch(filename, pattern)
 
 
 def _parse_mseed_filename(filename, mseed_format):
-    
+    """
+    Add docstring
+    """
     result = parse(mseed_format, filename)
     if not result:
         raise ValueError(f"Filename does not match format: {filename}")
