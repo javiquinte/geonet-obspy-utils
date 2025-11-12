@@ -1,8 +1,8 @@
 # An ObsPy Client to retrieve seismic data from the GeoNet Open Data Bucket 
 
 This repository contains Python classes for retrieving seismic waveform and 
-event data from the GeoNet AWS S3 buckets as ObsPy stream and catalogue 
-objects.
+event data from the GeoNet AWS S3 buckets as [ObsPy](https://docs.obspy.org/#)
+stream and catalogue objects.
 
 Codes written by [Pasan Herath](mailto:p.herath@gns.cri.nz)
 
