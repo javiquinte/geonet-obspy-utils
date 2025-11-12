@@ -12,7 +12,15 @@ If you need to retrieve data from within the last 7 days, please use FDSN.**
 **For your projects that do not require near real-time data, please use this 
 libary to retrieve data.**
 
-## Installation
+*If you discover any bugs or would like to see any features added, please raise
+an issue, and we will look into it*
+
+Thanks very much for using this plugin in your work, and it will help reduce
+the demand for our FDSN services. 
+
+
+
+## Installing the plugin
 
 1. Clone the repository into a directory of your choice
 2. Create a Python environment using conda (or other) or use an existing Python
@@ -28,7 +36,7 @@ This will install the geonet-obspy-plugin into the selected Python environment.
 1. To test the installation, run `pytest` 
 
 
-## Usage
+## Using the plugin
 
 ### Downloading MSEED waveforms into an ObsPy stream object by querying
 ```
