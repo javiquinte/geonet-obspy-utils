@@ -59,6 +59,8 @@ from geonet_obspy_utils.clients.aws.client import Client
 client = Client("GEONET")
 
 # input file name
+## file name structure for GeoNet:
+## "station.network/year.julday.station.location-channel.network.D"
 fname = "DCZ.NZ/2023.125.DCZ.10-HHZ.NZ.D"
 stream = client.read(fname)
 print (stream)
