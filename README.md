@@ -1,9 +1,8 @@
 # geonet-obspy-utils
 
-This repository contains Python classes for
-retrieving seismic waveform and event data
-from the GeoNet AWS S3 buckets as ObsPy 
-stream and catalogue objects.
+This repository contains Python classes for retrieving seismic waveform and 
+event data from the GeoNet AWS S3 buckets as ObsPy stream and catalogue 
+objects.
 
 Codes written by Pasan Herath 
 p.herath @gns.cri.nz
@@ -11,9 +10,13 @@ p.herath @gns.cri.nz
 
 ## Installation
 
-1. Clone the repository
+1. Clone the repository into a directory of your choice
+2. Create a Python environment using conda (or other) or use an existing Python
+environment
 2. `cd geonet-obspy-utils` 
 3. `pip install .`
+
+This will install the geonet-obspy-plugin into the selected Python environment.
 
 ## Testing the installation
 
@@ -22,6 +25,7 @@ p.herath @gns.cri.nz
 
 ## Usage
 
+### Downloading MSEED waveforms into ObsPy streams by querying
 ```
 # import the libraries
 from obspy import UTCDateTime
@@ -36,23 +40,58 @@ endtime = UTCDateTime("2024-03-20T18:05:00")
 
 # request stream by querying
 stream = client.get_waveforms(network = "NZ", 
-                              station = "DCZ", 
-                              location = "*", 
-                              channel = "HH*", 
+                              station = "DCZ,JCZ", 
+                              location = "10,?", 
+                              channel = "HH*, EH*", 
                                starttime = starttime, 
                                endtime = endtime, 
                                max_threads=4)
 
 print (stream)
+```
 
-# request stream by filename
+### Downloading MSEED waveforms into ObsPy streams using file name
+```
+# import the libraries
+from geonet_obspy_utils.clients.aws.client import Client
 
+# initialize client
+client = Client("GEONET")
+
+# input file name
 fname = "DCZ.NZ/2023.125.DCZ.10-HHZ.NZ.D"
-f = client.read(fname)
-print (f)
+stream = client.read(fname)
+print (stream)
 
-# request events
-cat = client.get_events(starttime, endtime)
+```
+
+### request events
+```
+# import the libraries
+from geonet_obspy_utils.clients.aws.client import Client
+
+# initialize client
+client = Client("GEONET")
+
+starttime = UTCDateTime("2021-03-20T16:59:00")
+endtime = UTCDateTime("2024-03-20T18:05:00")
+
+minlatitude = -50
+maxlatitude = -30
+minlongitude = 160
+maxlongitude = -175
+mindepth = 0
+maxdepth = 10
+minmagnitude = 3
+maxmagnitude = 6
+
+cat = client.get_events(starttime=starttime, endtime=endtime,
+                            minlatitude=minlatitude, maxlatitude=maxlatitude,
+                            minlongitude=minlongitude,
+                            maxlongitude=maxlongitude,
+                            mindepth=mindepth, maxdepth=maxdepth,
+                            minmagnitude=minmagnitude,
+                            maxmagnitude=maxmagnitude)
 
 print (cat)
 
