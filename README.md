@@ -4,7 +4,7 @@ This repository contains Python classes for retrieving seismic waveform and
 event data from the GeoNet AWS S3 buckets as ObsPy stream and catalogue 
 objects.
 
-Codes written by [Pasan Herath](p.herath@gns.cri.nz)
+Codes written by [Pasan Herath](mailto:p.herath@gns.cri.nz)
 
 **Please note that this service is not suitable for real-time data retrieval. 
 If you need to retrieve data from within the last 7 days, please use FDSN.**
