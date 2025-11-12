@@ -4,21 +4,21 @@ This repository contains Python classes for retrieving seismic waveform and
 event data from the GeoNet AWS S3 buckets as ObsPy stream and catalogue 
 objects.
 
-Codes written by Pasan Herath 
-p.herath @gns.cri.nz
+Codes written by [Pasan Herath](p.herath@gns.cri.nz)
 
-Please note that this service is not suitable for real-time data retrieval. 
-If you need to retrieve data from within the last 7 days, please use FDSN. 
+**Please note that this service is not suitable for real-time data retrieval. 
+If you need to retrieve data from within the last 7 days, please use FDSN.**
 
-For your projects that do not require near real-time data, please use this 
-libary to retrieve data. 
+**For your projects that do not require near real-time data, please use this 
+libary to retrieve data.**
 
 ## Installation
 
 1. Clone the repository into a directory of your choice
 2. Create a Python environment using conda (or other) or use an existing Python
 environment
-2. Open a terminal in the directory where the repository was cloned to and run `cd geonet-obspy-utils` 
+2. Open a terminal in the directory where the repository was cloned to and run
+ `cd geonet-obspy-utils` 
 3. Then run `pip install .`
 
 This will install the geonet-obspy-plugin into the selected Python environment.
@@ -30,7 +30,7 @@ This will install the geonet-obspy-plugin into the selected Python environment.
 
 ## Usage
 
-### Downloading MSEED waveforms into ObsPy streams by querying
+### Downloading MSEED waveforms into an ObsPy stream object by querying
 ```
 # import the libraries
 from obspy import UTCDateTime
@@ -55,7 +55,7 @@ stream = client.get_waveforms(network = "NZ",
 print (stream)
 ```
 
-### Downloading MSEED waveforms into ObsPy streams using file name
+### Downloading MSEED waveforms into an ObsPy stream object using file name
 ```
 # import the libraries
 from geonet_obspy_utils.clients.aws.client import Client
@@ -72,7 +72,7 @@ print (stream)
 
 ```
 
-### request events
+### Request event xmls into an ObsPy catalogue oject
 ```
 # import the libraries
 from geonet_obspy_utils.clients.aws.client import Client
