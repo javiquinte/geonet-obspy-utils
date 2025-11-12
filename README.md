@@ -6,14 +6,14 @@ stream and catalogue objects.
 
 Codes written by [Pasan Herath](mailto:p.herath@gns.cri.nz)
 
-**Please note that this service is not suitable for real-time data retrieval. 
+**Please note that this plugin is not suitable for real-time data retrieval. 
 If you need to retrieve data from within the last 7 days, please use FDSN.**
 
 **For your projects that do not require near real-time data, please use this 
 libary to retrieve data.**
 
 *If you discover any bugs or would like to see any features added, please raise
-an issue, and we will look into it*
+an issue, and we will look into it.*
 
 Thanks very much for using this plugin in your work, and it will help reduce
 the demand for our FDSN services. 
