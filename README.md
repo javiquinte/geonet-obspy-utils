@@ -7,20 +7,25 @@ objects.
 Codes written by Pasan Herath 
 p.herath @gns.cri.nz
 
+Please note that this service is not suitable for real-time data retrieval. 
+If you need to retrieve data from within the last 7 days, please use FDSN. 
+
+For your projects that do not require near real-time data, please use this 
+libary to retrieve data. 
 
 ## Installation
 
 1. Clone the repository into a directory of your choice
 2. Create a Python environment using conda (or other) or use an existing Python
 environment
-2. `cd geonet-obspy-utils` 
-3. `pip install .`
+2. Open a terminal in the directory where the repository was cloned to and run `cd geonet-obspy-utils` 
+3. Then run `pip install .`
 
 This will install the geonet-obspy-plugin into the selected Python environment.
 
 ## Testing the installation
 
-1. `pytest` 
+1. To test the installation, run `pytest` 
 
 
 ## Usage
