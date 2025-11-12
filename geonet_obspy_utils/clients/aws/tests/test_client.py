@@ -52,19 +52,31 @@ def test_geonet_event_download():
     """
     client = Client("GEONET")
 
-    starttime = UTCDateTime("2024-03-20T16:59:00")
+    starttime = UTCDateTime("2021-03-20T16:59:00")
     endtime = UTCDateTime("2024-03-20T18:05:00")
 
-    cat = client.get_events(starttime, endtime)
+    minlatitude = -50
+    maxlatitude = -30
+    minlongitude = 160
+    maxlongitude = -175
+    mindepth = 0
+    maxdepth = 10
+    minmagnitude = 3
+    maxmagnitude = 6
 
-    assert len(cat) > 0, "No events were returned from GEONET AWS client."
+    cat = client.get_events(starttime=starttime, endtime=endtime,
+                            minlatitude=minlatitude, maxlatitude=maxlatitude,
+                            minlongitude=minlongitude,
+                            maxlongitude=maxlongitude,
+                            mindepth=mindepth, maxdepth=maxdepth,
+                            minmagnitude=minmagnitude,
+                            maxmagnitude=maxmagnitude)
 
-    cat = client.get_events(starttime, endtime)
     assert len(cat) > 0, "No events were returned from GEONET AWS client."
 
 
 if __name__ == "__main__":
     test_geonet_waveform_download()
-    test_scedc_waveform_download()
+    # test_scedc_waveform_download()
     test_geonet_event_download()
     # print("GeoNet waveform data downloaded successfully!")

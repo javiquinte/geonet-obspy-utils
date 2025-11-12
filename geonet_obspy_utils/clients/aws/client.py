@@ -263,7 +263,10 @@ class Client(object):
         else:
             raise IndexError("No waveforms found!")
 
-    def get_events(self, starttime=None, endtime=None, eventid=None,
+    def get_events(self, starttime=None, endtime=None, minlatitude=None,
+                   maxlatitude=None, minlongitude=None, maxlongitude=None,
+                   mindepth=None, maxdepth=None, minmagnitude=None,
+                   maxmagnitude=None, eventid=None, filename=None,
                    max_threads=1, **kwargs):
         """
         Get event information from GeoNet AWS S3 bucket.
@@ -303,19 +306,6 @@ class Client(object):
         :type maxlongitude: float, optional
         :param maxlongitude: Limit to events with a longitude smaller than the
             specified maximum.
-        :type latitude: float, optional
-        :param latitude: Specify the latitude to be used for a radius search.
-        :type longitude: float, optional
-        :param longitude: Specify the longitude to be used for a radius
-            search.
-        :type minradius: float, optional
-        :param minradius: Limit to events within the specified minimum number
-            of degrees from the geographic point defined by the latitude and
-            longitude parameters.
-        :type maxradius: float, optional
-        :param maxradius: Limit to events within the specified maximum number
-            of degrees from the geographic point defined by the latitude and
-            longitude parameters.
         :type mindepth: float, optional
         :param mindepth: Limit to events with depth, in kilometers, larger than
             the specified minimum.
@@ -328,56 +318,11 @@ class Client(object):
         :type maxmagnitude: float, optional
         :param maxmagnitude: Limit to events with a magnitude smaller than the
             specified maximum.
-        :type magnitudetype: str, optional
-        :param magnitudetype: Specify a magnitude type to use for testing the
-            minimum and maximum limits.
-        :type eventtype: str, optional
-        :param eventtype: Limit to events with a specified event type.
-            Multiple types are comma-separated (e.g.,
-            ``"earthquake,quarry blast"``). Allowed values are from QuakeML.
-            See :const:`obspy.core.event.header.EventType` for a list of
-            allowed event types.
-        :type includeallorigins: bool, optional
-        :param includeallorigins: Specify if all origins for the event should
-            be included, default is data center dependent but is suggested to
-            be the preferred origin only.
-        :type includeallmagnitudes: bool, optional
-        :param includeallmagnitudes: Specify if all magnitudes for the event
-            should be included, default is data center dependent but is
-            suggested to be the preferred magnitude only.
-        :type includearrivals: bool, optional
-        :param includearrivals: Specify if phase arrivals should be included.
-        :type eventid: str or int, optional
-        :param eventid: Select a specific event by ID; event identifiers are
-            data center specific (String or Integer).
-        :type limit: int, optional
-        :param limit: Limit the results to the specified number of events.
-        :type offset: int, optional
-        :param offset: Return results starting at the event count specified,
-            starting at 1.
-        :type orderby: str, optional
-        :param orderby: Order the result by time or magnitude with the
-            following possibilities:
-
-            * time: order by origin descending time
-            * time-asc: order by origin ascending time
-            * magnitude: order by descending magnitude
-            * magnitude-asc: order by ascending magnitude
-
-        :type catalog: str, optional
-        :param catalog: Limit to events from a specified catalog
-        :type contributor: str, optional
-        :param contributor: Limit to events contributed by a specified
-            contributor.
-        :type updatedafter: :class:`~obspy.core.utcdatetime.UTCDateTime`,
-            optional
-        :param updatedafter: Limit to events updated after the specified time.
         :type filename: str or file
         :param filename: If given, the downloaded data will be saved there
             instead of being parsed to an ObsPy object. Thus it will contain
             the raw data from the webservices.
         """
-
         if eventid:
             try:
                 bin_obj = self._s3_event.Object(eventid+".xml") \
@@ -394,8 +339,12 @@ class Client(object):
                     raise RuntimeError(f"Error fetching file '{eventid}' " +
                                        "from S3: {e}") from e
         else:
-            event_data = _fetch_geonet_earthquake_data(starttime, endtime,
-                                                       **kwargs)
+            event_data = _fetch_geonet_earthquake_data(
+                starttime=starttime, endtime=endtime, minlatitude=minlatitude,
+                maxlatitude=maxlatitude, minlongitude=minlongitude,
+                maxlongitude=maxlongitude, mindepth=mindepth,
+                maxdepth=maxdepth, minmagnitude=minmagnitude,
+                maxmagnitude=maxmagnitude, **kwargs)
             if event_data is None:
                 raise ValueError("No events found for the given parameters.")
 
@@ -427,7 +376,11 @@ class Client(object):
 
             cat = Catalog(ev_list)
 
-            return cat
+            if filename:
+                cat.write(filename)
+                return None
+            else:
+                return cat
 
     def read(self, fname):
         """
@@ -473,14 +426,49 @@ class Client(object):
                                    "S3: {e}") from e
 
 
-def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
+def _fetch_geonet_earthquake_data(starttime, endtime, minlatitude=-90,
+                                  maxlatitude=90, minlongitude=-180,
+                                  maxlongitude=180, mindepth=0, maxdepth=1000,
+                                  minmagnitude=-1, maxmagnitude=10,
+                                  ):
     """
-    Add dosctring
+    Function to fetch earthquake data from GeoNet QuakeSearch service.
+    :type starttime: :class:`~obspy.core.utcdatetime.UTCDateTime`, optional
+    :param starttime: Limit to events on or after the specified start time.
+    :type endtime: :class:`~obspy.core.utcdatetime.UTCDateTime`, optional
+    :param endtime: Limit to events on or before the specified end time.
+    :type minlatitude: float, optional
+    :param minlatitude: Limit to events with a latitude larger than the
+        specified minimum.
+    :type maxlatitude: float, optional
+    :param maxlatitude: Limit to events with a latitude smaller than the
+        specified maximum.
+    :type minlongitude: float, optional
+    :param minlongitude: Limit to events with a longitude larger than the
+        specified minimum.
+    :type maxlongitude: float, optional
+    :param maxlongitude: Limit to events with a longitude smaller than the
+        specified maximum.
+    :type mindepth: float, optional
+    :param mindepth: Limit to events with depth, in kilometers, larger than
+        the specified minimum.
+    :type maxdepth: float, optional
+    :param maxdepth: Limit to events with depth, in kilometers, smaller than
+        the specified maximum.
+    :type minmagnitude: float, optional
+    :param minmagnitude: Limit to events with a magnitude larger than the
+        specified minimum.
+    :type maxmagnitude: float, optional
+    :param maxmagnitude: Limit to events with a magnitude smaller than the
+        specified maximum.
+    :return: Pandas Series of public IDs of the events matching the query.
+    :rtype: :class:`pandas.Series`
     """
     if starttime is None or endtime is None:
-        raise ValueError("Both 'starttime' and 'endtime' must be provided.")
+        # Default to a wide time range if not provided
+        starttime = UTCDateTime("1970-01-01")
+        endtime = UTCDateTime.now()
 
-    # Convert UTCDateTime to pandas Timestamp
     t1 = pd.Timestamp(str(starttime))
     t2 = pd.Timestamp(str(endtime))
 
@@ -505,29 +493,27 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
             f"startdate={start}&enddate={end}"
         )
 
-        # Add optional parameters if provided
-        if "minmag" in kwargs:
-            url += f"&minmag={kwargs['minmag']}"
-        if "maxmag" in kwargs:
-            url += f"&maxmag={kwargs['maxmag']}"
-        if "maxdepth" in kwargs:
-            url += f"&maxdepth={kwargs['maxdepth']}"
-        if "mindepth" in kwargs:
-            url += f"&mindepth={kwargs['mindepth']}"
-        if (
-            "bbox" in kwargs
-            and isinstance(kwargs["bbox"], list)
-            and len(kwargs["bbox"]) == 4
-        ):
-            bbox_str = ",".join(map(str, kwargs["bbox"]))
-            url += f"&bbox={bbox_str}"
+        if minmagnitude:
+            url += "&minmag={:f}".format(minmagnitude)
+        if maxmagnitude:
+            url += "&maxmag={:f}".format(maxmagnitude)
+        if maxdepth:
+            url += "&maxdepth={:f}".format(maxdepth)
+        if mindepth:
+            url += "&mindepth={:f}".format(mindepth)
+
+        bbox = [minlongitude, minlatitude, maxlongitude, maxlatitude]
+        if (isinstance(bbox, list) and len(bbox) == 4):
+            bbox_str = ",".join(map(str, bbox))
+            url += "&bbox={:s}".format(bbox_str)
 
         response = requests.get(url)
         if response.status_code == 200:
             df = pd.read_csv(StringIO(response.text))
             all_data.append(df)
         else:
-            print(f"Failed to fetch data for the period {start} to {end}")
+            print(f"Failed to fetch data for the period {start} \
+                             to {end}")
 
     # Combine all the DataFrames
     if all_data:
@@ -540,7 +526,12 @@ def _fetch_geonet_earthquake_data(starttime, endtime, **kwargs):
 
 def _fix_mseed_timing(mstl_traceids):
     """
-    Add docstring
+    Fix timing issues in MiniSEED data using mseedlib and convert to
+    ObsPy Stream.
+    :type mstl_traceids: list of :class:`mseedlib.MSTraceID`
+    :param mstl_traceids: List of MSTraceID objects from mseedlib.
+    :return: ObsPy Stream with corrected timing.
+    :rtype: :class:`obspy.core.stream.Stream`
     """
     stream = Stream()
     for traceid in mstl_traceids:
@@ -569,7 +560,13 @@ def _fix_mseed_timing(mstl_traceids):
 
 def _match_wildcard(pattern, filename):
     """
-    Add docstring
+    Match a filename against a pattern with wildcards.
+    :type pattern: str
+    :param pattern: Pattern with wildcards ('*' and '?').
+    :type filename: str
+    :param filename: Filename to match against the pattern.
+    :return: True if the filename matches the pattern, False otherwise.
+    :rtype: bool
     """
     # Replace multiple underscores with a single '*'
     pattern = pattern.replace("_", "*")
@@ -580,7 +577,13 @@ def _match_wildcard(pattern, filename):
 
 def _parse_mseed_filename(filename, mseed_format):
     """
-    Add docstring
+    Parse MiniSEED filename to extract metadata using a given format.
+    :type filename: str
+    :param filename: MiniSEED filename to parse.
+    :type mseed_format: str
+    :param mseed_format: Format string defining the filename structure.
+    :return: Dictionary with extracted metadata.
+    :rtype: dict
     """
     result = parse(mseed_format, filename)
     if not result:
