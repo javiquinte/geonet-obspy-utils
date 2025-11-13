@@ -1,8 +1,6 @@
-<<<<<<< HEAD
-# gitignore
-#
+# .gitignore
 # Reference: https://git-scm.com/docs/gitignore
-=======
+
 # Ignore build artifacts
 build/
 dist/
@@ -31,4 +29,3 @@ venv/
 # Ignore IDE/editor settings
 .vscode/
 .idea/
->>>>>>> ef460b9 (Added files)
