@@ -1,4 +1,4 @@
-# Code owners
+# Code owners of geonet-obspy-utils repository
+# GitHub dmc team is representing Science Operations and Data Team of Earth Sciences New Zealand
 #
-# Reference: https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners
-#
+*    @GeoNet/dmc
