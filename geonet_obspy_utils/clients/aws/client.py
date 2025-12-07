@@ -106,7 +106,7 @@ class Client(object):
 
         return event_bob.Bucket(self.event_bucket_name)
 
-    def _check_s3_match(self, bucket, prefix, params, level=0) -> List:
+    def _check_s3_match(self, bucket, root, prefix, params, level=0) -> List:
         """
         Check if the directories in this level match the input provided
         """
@@ -118,7 +118,8 @@ class Client(object):
         if level == len(self.filename)-1:
             for file in entries['Contents']:
                 f = file['Key']
-                req = '/'.join([self.filename[l].format(**params) for l in range(level+1)])
+                req = root + '/'.join([self.filename[l].format(**params) for l in range(level+1)])
+                print(req, f)
                 if _match_wildcard(req, f):
                     result.append(f)
             return result
@@ -127,9 +128,10 @@ class Client(object):
         # so look only the directories
         for folder in entries['CommonPrefixes']:
             f = folder['Prefix'].rstrip('/')
-            req = '/'.join([self.filename[l].format(**params) for l in range(level+1)])
+            req = root + '/'.join([self.filename[l].format(**params) for l in range(level+1)])
+            # print(req, f)
             if _match_wildcard(req, f):
-                result.extend(self._check_s3_match(bucket, folder['Prefix'], params, level+1))
+                result.extend(self._check_s3_match(bucket, root, folder['Prefix'], params, level+1))
         return result
 
 
@@ -214,7 +216,8 @@ class Client(object):
                 params = group.copy()
                 params['year'] = year
                 params['day_of_year'] = day_of_year
-                matching_files += self._check_s3_match(self.waveform_bucket_name, prefix, params)
+                matching_files += self._check_s3_match(self.waveform_bucket_name, self.waveform_dir,
+                                                       prefix, params)
                 
             # Move to the next day
             secs_to_next_day = 86400 - (current_time.ns -
