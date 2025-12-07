@@ -59,18 +59,18 @@ class Client(object):
             raise ValueError(f"Unknown base name: {client_name}")
 
         self.waveform_bucket_name = self.config["waveform_bucket_name"]
-        self.event_bucket_name = self.config["event_bucket_name"]
+        self.event_bucket_name = self.config.get("event_bucket_name", None)
         self.base_url = self.config["base_url"]
-        self.waveform_dir = self.config["waveform_dir"]
-        self.year_day_format = self.config["year_day_format"]
-        self.mseed_file_format = self.config["mseed_file_format"]
+        self.waveform_dir = self.config.get("waveform_dir", '')
+        self.filename = [part for part in self.config["filename"].split('/') if len(part)]
 
     @property
     def _s3(self):
         """
         To enable instantiation for individual threads.
         """
-        return boto3.client("s3", config=Config(signature_version=UNSIGNED))
+        return boto3.client("s3", endpoint_url=self.base_url,
+                            config=Config(signature_version=UNSIGNED))
 
     @property
     def _s3_waveform(self):
@@ -78,8 +78,8 @@ class Client(object):
         S3 access as property to enforce instantiation for individual
         threads.
         """
-        waveform_bob = boto3.resource(
-            's3',
+        waveform_bob = boto3.client(
+            's3', endpoint_url=self.base_url,
             config=Config(signature_version=UNSIGNED))
 
         return waveform_bob.Bucket(self.waveform_bucket_name)
@@ -90,30 +90,40 @@ class Client(object):
         S3 access as property to enforce instantiation for individual threads.
         Only applies to GeoNet for now.
         """
+        if self.event_bucket_name is None:
+            raise Exception('No bucket for event data')
         event_bob = boto3.resource(
-            's3',
+            's3', endpoint_url=self.base_url,
             config=Config(signature_version=UNSIGNED))
 
         return event_bob.Bucket(self.event_bucket_name)
 
-    def _list_available_files(self, prefix):
+    def _check_s3_match(self, bucket, prefix, params, level=0) -> List:
         """
-        List files under the given prefix using boto3 and anonymous access.
+        Check if the directories in this level match the input provided
         """
-        file_list = []
+        # print('Entering:', prefix)
+        result = list()
+        entries = self._s3.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter='/')
 
-        paginator = self._s3.get_paginator('list_objects_v2')
-        try:
-            for page in paginator.paginate(Bucket=self.waveform_bucket_name,
-                                           Prefix=prefix):
-                contents = page.get("Contents", [])
+        # If this is the last entry that means that we only need to look at the files
+        if level == len(self.filename)-1:
+            for file in entries['Contents']:
+                f = file['Key']
+                req = '/'.join([self.filename[l].format(**params) for l in range(level+1)])
+                if _match_wildcard(req, f):
+                    result.append(f)
+            return result
 
-                file_list.extend([item["Key"] for item in contents])
-        except self._s3.exceptions.NoSuchBucket:
-            print(f"Bucket '{self.waveform_bucket_name}' does not exist.")
-        except Exception as e:
-            print(f"Error accessing S3 bucket '{self.bucket_name}': {e}")
-        return file_list
+        # If this is not the last entry we still need to go deep down through the tree structure,
+        # so look only the directories
+        for folder in entries['CommonPrefixes']:
+            f = folder['Prefix'].rstrip('/')
+            req = '/'.join([self.filename[l].format(**params) for l in range(level+1)])
+            if _match_wildcard(req, f):
+                result.extend(self._check_s3_match(bucket, folder['Prefix'], params, level+1))
+        return result
+
 
     def get_waveforms(self, network, station, location, channel, starttime,
                       endtime, filename=None, max_threads=1):
@@ -192,35 +202,12 @@ class Client(object):
 
             for group in groups:
                 # Format the prefix with the current year and day_of_year
-                prefix = self.waveform_dir + \
-                    self.year_day_format.format(year=year,
-                                                day_of_year=day_of_year,
-                                                network=group["network"])
-
-                # List available files matching the prefix in the bucket
-                available_files = self._list_available_files(prefix)
-
-                object_key_pattern = (
-                    self.waveform_dir
-                    + self.year_day_format.format(
-                        year=year,
-                        day_of_year=day_of_year,
-                        network=group["network"],
-                    )
-                    + self.mseed_file_format.format(
-                        network=group["network"],
-                        station=group["station"],
-                        location=group["location"],
-                        channel=group["channel"],
-                        year=year,
-                        day_of_year=day_of_year,
-                    )
-                )
-
-                # Filter based on wildcards using match_wildcard
-                matching_files += [f for f in available_files
-                                   if _match_wildcard(object_key_pattern, f)]
-
+                prefix = self.waveform_dir.lstrip('/')
+                params = group.copy()
+                params['year'] = year
+                params['day_of_year'] = day_of_year
+                matching_files += self._check_s3_match(self.waveform_bucket_name, prefix, params)
+                
             # Move to the next day
             secs_to_next_day = 86400 - (current_time.ns -
                                         UTCDateTime(current_time.year,
@@ -236,11 +223,9 @@ class Client(object):
         # We use mseedlib here because ObsPy does not apply timing correctly
         # when the sampling rate is not uniform with the dataloggers.
         def download_file(file):
-            bin_obj = self._s3_waveform.Object(file).get()["Body"].read()
             mstl = MSTraceList()
             with tempfile.NamedTemporaryFile(delete=True) as tmp:
-                tmp.write(bin_obj)
-                tmp.flush()
+                self._s3.download_file(self.waveform_bucket_name, file, tmp.name)
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
             return _fix_mseed_timing(mstl.traceids())
 
