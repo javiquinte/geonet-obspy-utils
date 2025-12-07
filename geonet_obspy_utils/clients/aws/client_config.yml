@@ -4,21 +4,21 @@ GEOFON:
   filename: "{year}/{network}/{station}/{channel}.D/{network}.{station}.{location}.{channel}.D.{year}.{day_of_year:03d}/"
 
 GEONET:
-  base_url: https://geonet-open-data.s3.ap-southeast-2.amazonaws.com
+  base_url: https://s3.ap-southeast-2.amazonaws.com
   waveform_bucket_name: geonet-open-data
   event_bucket_name: seiscompml07
   waveform_dir: waveforms/miniseed/
   filename: "{year}/{year}.{day_of_year:03d}/{station}.{network}/{year}.{day_of_year:03d}.{station}.{location}-{channel}.{network}.D"
 
 SCEDC:
-  base_url: https://scedc-pds.s3.us-west-2.amazonaws.com
+  base_url: https://s3.us-west-2.amazonaws.com
   waveform_bucket_name: scedc-pds
   event_bucket_name: NA
   waveform_dir: continuous_waveforms/
   filename: "{year}/{year}_{day_of_year:03d}/{network}{station:_<5}{channel}{location:_<3}{year}{day_of_year:03d}.ms"
 
 NCEDC:
-  base_url: https://ncedc-pds.s3.us-east-2.amazonaws.com
+  base_url: https://s3.us-east-2.amazonaws.com
   waveform_bucket_name: ncedc-pds
   waveform_dir: continuous_waveforms/
   filename: "{network}/{year}/{year}.{day_of_year:03d}/{station}.{network}.{channel}.{location}.D.{year}.{day_of_year:03d}"
