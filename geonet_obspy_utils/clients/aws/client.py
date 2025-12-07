@@ -7,6 +7,7 @@ GeoNet AWS  client for ObsPy.
 
 from obspy import UTCDateTime, Stream, Trace, read_events, Catalog
 import fnmatch
+from typing import List
 import tempfile
 import yaml
 import os
