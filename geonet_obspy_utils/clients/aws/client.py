@@ -70,8 +70,10 @@ class Client(object):
         """
         To enable instantiation for individual threads.
         """
-        return boto3.client("s3", endpoint_url=self.base_url,
-                            config=Config(signature_version=UNSIGNED))
+        s3params = {'config': Config(signature_version=UNSIGNED)}
+        if self.base_url is not None:
+            s3params['endpoint_url'] = self.base_url
+        return boto3.client("s3", **s3params)
 
     @property
     def _s3_waveform(self):
@@ -79,9 +81,11 @@ class Client(object):
         S3 access as property to enforce instantiation for individual
         threads.
         """
+        s3params = {'config': Config(signature_version=UNSIGNED)}
+        if self.base_url is not None:
+            s3params['endpoint_url'] = self.base_url
         waveform_bob = boto3.client(
-            's3', endpoint_url=self.base_url,
-            config=Config(signature_version=UNSIGNED))
+            's3', **s3params)
 
         return waveform_bob.Bucket(self.waveform_bucket_name)
 
@@ -93,9 +97,12 @@ class Client(object):
         """
         if self.event_bucket_name is None:
             raise Exception('No bucket for event data')
+
+        s3params = {'config': Config(signature_version=UNSIGNED)}
+        if self.base_url is not None:
+            s3params['endpoint_url'] = self.base_url
         event_bob = boto3.resource(
-            's3', endpoint_url=self.base_url,
-            config=Config(signature_version=UNSIGNED))
+            's3', **s3params)
 
         return event_bob.Bucket(self.event_bucket_name)
 
