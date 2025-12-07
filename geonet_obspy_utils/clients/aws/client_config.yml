@@ -8,20 +8,17 @@ GEONET:
   waveform_bucket_name: geonet-open-data
   event_bucket_name: seiscompml07
   waveform_dir: waveforms/miniseed/
-  year_day_format: "{year}/{year}.{day_of_year:03d}/"
-  mseed_file_format: "{station}.{network}/{year}.{day_of_year:03d}.{station}.{location}-{channel}.{network}.D"
+  filename: "{year}/{year}.{day_of_year:03d}/{station}.{network}/{year}.{day_of_year:03d}.{station}.{location}-{channel}.{network}.D"
 
 SCEDC:
   base_url: https://scedc-pds.s3.us-west-2.amazonaws.com
   waveform_bucket_name: scedc-pds
   event_bucket_name: NA
   waveform_dir: continuous_waveforms/
-  year_day_format: "{year}/{year}_{day_of_year:03d}/"
-  mseed_file_format: "{network}{station:_<5}{channel}{location:_<3}{year}{day_of_year:03d}.ms"
+  filename: "{year}/{year}_{day_of_year:03d}/{network}{station:_<5}{channel}{location:_<3}{year}{day_of_year:03d}.ms"
 
 NCEDC:
   base_url: https://ncedc-pds.s3.us-east-2.amazonaws.com
   waveform_bucket_name: ncedc-pds
   waveform_dir: continuous_waveforms/
-  year_day_format: "{network}/{year}/{year}.{day_of_year:03d}/"
-  mseed_file_format: "{station}.{network}.{channel}.{location}.D.{year}.{day_of_year:03d}"
+  filename: "{network}/{year}/{year}.{day_of_year:03d}/{station}.{network}.{channel}.{location}.D.{year}.{day_of_year:03d}"
