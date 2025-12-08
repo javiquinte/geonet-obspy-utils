@@ -387,11 +387,9 @@ class Client(object):
         # # Generate object key pattern
         filename = self.waveform_dir + '/'.join(self.filename).format(**mseed_stats)
         try:
-            bin_obj = self._s3_waveform.Object(filename).get()["Body"].read()
             mstl = MSTraceList()
             with tempfile.NamedTemporaryFile(delete=True) as tmp:
-                tmp.write(bin_obj)
-                tmp.flush()
+                self._s3.download_file(self.waveform_bucket_name, filename, tmp.name)
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
 
             return _fix_mseed_timing(mstl.traceids())
