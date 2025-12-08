@@ -383,25 +383,9 @@ class Client(object):
         Function to read mseed file by giving filename
         No wildcards are supported here.
         """
-        mseed_stats = _parse_mseed_filename(fname, self.mseed_file_format)
+        mseed_stats = _parse_mseed_filename(fname, self.filename[-1])
         # # Generate object key pattern
-        filename = (
-            self.waveform_dir
-            + self.year_day_format.format(
-                year=mseed_stats["year"],
-                day_of_year=mseed_stats["day_of_year"],
-                network=mseed_stats["network"],
-            )
-            + self.mseed_file_format.format(
-                network=mseed_stats["network"],
-                station=mseed_stats["station"],
-                location=mseed_stats["location"],
-                channel=mseed_stats["channel"],
-                year=mseed_stats["year"],
-                day_of_year=mseed_stats["day_of_year"],
-            )
-        )
-
+        filename = self.waveform_dir + '/'.join(self.filename).format(**mseed_stats)
         try:
             bin_obj = self._s3_waveform.Object(filename).get()["Body"].read()
             mstl = MSTraceList()
