@@ -25,7 +25,7 @@ def test_geonet_waveform_download():
     assert len(stream) > 0, "No waveforms returned by GeoNet AWS client."
 
     # file query
-    fname = "DCZ.NZ/2023.125.DCZ.10-HHZ.NZ.D"
+    fname = "2023.125.DCZ.10-HHZ.NZ.D"
 
     f = client.read(fname)
     assert len(f) > 0, "No files were returned from GeoNet AWS client."
