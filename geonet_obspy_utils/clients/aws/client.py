@@ -3,8 +3,7 @@
 """
 GeoNet AWS  client for ObsPy.
 """
-
-
+import datetime
 from obspy import UTCDateTime, Stream, Trace, read_events, Catalog
 import fnmatch
 from typing import List
@@ -206,6 +205,7 @@ class Client(object):
 
         matching_files = []
 
+        t0 = datetime.datetime.now()
         while current_time <= endtime:
             year = current_time.year
             day_of_year = current_time.julday
@@ -240,6 +240,8 @@ class Client(object):
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
             return _fix_mseed_timing(mstl.traceids())
 
+        print('List files: %.2f seconds', (datetime.datetime.now() - t0).seconds)
+        t0 = datetime.datetime.now()
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
             futures = [executor.submit(download_file, f)
                        for f in matching_files]
@@ -247,6 +249,7 @@ class Client(object):
                 day_st = future.result()
                 st += day_st
 
+        print('Download: %.2f seconds', (datetime.datetime.now() - t0).seconds)
         st.trim(starttime, endtime)
 
         if len(st) > 0:
