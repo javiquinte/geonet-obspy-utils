@@ -118,7 +118,7 @@ class Client(object):
             for file in entries['Contents']:
                 f = file['Key']
                 req = root + '/'.join([self.filename[l].format(**params) for l in range(level+1)])
-                print(req, f)
+                # print(req, f)
                 if _match_wildcard(req, f):
                     result.append(f)
             return result
@@ -240,7 +240,7 @@ class Client(object):
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
             return _fix_mseed_timing(mstl.traceids())
 
-        print('List files: %.2f seconds', (datetime.datetime.now() - t0).seconds)
+        print('List files: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
         t0 = datetime.datetime.now()
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
             futures = [executor.submit(download_file, f)
@@ -249,7 +249,7 @@ class Client(object):
                 day_st = future.result()
                 st += day_st
 
-        print('Download: %.2f seconds', (datetime.datetime.now() - t0).seconds)
+        print('Download: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
         st.trim(starttime, endtime)
 
         if len(st) > 0:
