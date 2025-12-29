@@ -75,6 +75,50 @@ def test_geonet_event_download():
     assert len(cat) > 0, "No events were returned from GEONET AWS client."
 
 
+def test_geofon_waveform_ge():
+    """
+    Download waveforms from GE network hosted at GEOFON
+    """
+    client = Client("GEOFON")
+
+    # waveform query
+    starttime = UTCDateTime("2025-08-20T20:59:00")
+    endtime = UTCDateTime("2025-08-21T14:05:00")
+
+    stream = client.get_waveforms("GE", "APE", "*", "HHZ,BHZ",
+                                  starttime, endtime, max_threads=2)
+
+    assert len(stream) > 0, "No waveforms returned by GEOFON."
+
+    # file query
+    fname = "GE.APE..HHZ.D.2023.125"
+
+    f = client.read(fname)
+    assert len(f) > 0, "No files were returned from GEOFON."
+
+
+def test_geofon_waveform_cx():
+    """
+    Download waveforms from CX network hosted at GEOFON
+    """
+    client = Client("GEOFON")
+
+    # waveform query
+    starttime = UTCDateTime("2025-08-20T20:59:00")
+    endtime = UTCDateTime("2025-08-21T14:05:00")
+
+    stream = client.get_waveforms("CX", "PB01", "*", "HHZ,BHZ",
+                                  starttime, endtime, max_threads=2)
+
+    assert len(stream) > 0, "No waveforms returned by GEOFON."
+
+    # file query
+    fname = "CX.PB01..HHZ.D.2023.125"
+
+    f = client.read(fname)
+    assert len(f) > 0, "No files were returned from GEOFON."
+
+
 if __name__ == "__main__":
     test_geonet_waveform_download()
     # test_scedc_waveform_download()
