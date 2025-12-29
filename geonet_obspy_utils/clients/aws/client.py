@@ -74,19 +74,12 @@ class Client(object):
             s3params['endpoint_url'] = self.base_url
         return boto3.client("s3", **s3params)
 
-    @property
-    def _s3_waveform(self):
+    def _get_bucket(self, params: dict = None) -> str:
         """
         S3 access as property to enforce instantiation for individual
         threads.
         """
-        s3params = {'config': Config(signature_version=UNSIGNED)}
-        if self.base_url is not None:
-            s3params['endpoint_url'] = self.base_url
-        waveform_bob = boto3.client(
-            's3', **s3params)
-
-        return waveform_bob.Bucket(self.waveform_bucket_name)
+        return self.waveform_bucket_name.format(**params).lower()
 
     @property
     def _s3_event(self):
@@ -132,7 +125,6 @@ class Client(object):
             if _match_wildcard(req, f):
                 result.extend(self._check_s3_match(bucket, root, folder['Prefix'], params, level+1))
         return result
-
 
     def get_waveforms(self, network, station, location, channel, starttime,
                       endtime, filename=None, max_threads=1):
@@ -217,6 +209,7 @@ class Client(object):
                 params['year'] = year
                 params['day_of_year'] = day_of_year
                 matching_files += self._check_s3_match(self.waveform_bucket_name, self.waveform_dir,
+                matching_files += self._check_s3_match(self._get_bucket(params), self.waveform_dir,
                                                        prefix, params)
                 
             # Move to the next day
@@ -236,7 +229,7 @@ class Client(object):
         def download_file(file):
             mstl = MSTraceList()
             with tempfile.NamedTemporaryFile(delete=True) as tmp:
-                self._s3.download_file(self.waveform_bucket_name, file, tmp.name)
+                self._s3.download_file(self._get_bucket(params), file, tmp.name)
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
             return _fix_mseed_timing(mstl.traceids())
 
@@ -392,7 +385,7 @@ class Client(object):
         try:
             mstl = MSTraceList()
             with tempfile.NamedTemporaryFile(delete=True) as tmp:
-                self._s3.download_file(self.waveform_bucket_name, filename, tmp.name)
+                self._s3.download_file(self._get_bucket(mseed_stats), filename, tmp.name)
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
 
             return _fix_mseed_timing(mstl.traceids())
