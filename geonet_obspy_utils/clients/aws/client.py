@@ -102,7 +102,7 @@ class Client(object):
         """
         Check if the directories in this level match the input provided
         """
-        # print('Entering:', prefix)
+
         result = list()
         entries = self._s3.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter='/')
 
@@ -111,7 +111,6 @@ class Client(object):
             for file in entries['Contents']:
                 f = file['Key']
                 req = root + '/'.join([self.filename[l].format(**params) for l in range(level+1)])
-                # print(req, f)
                 if _match_wildcard(req, f):
                     result.append(f)
             return result
@@ -121,7 +120,6 @@ class Client(object):
         for folder in entries['CommonPrefixes']:
             f = folder['Prefix'].rstrip('/')
             req = root + '/'.join([self.filename[l].format(**params) for l in range(level+1)])
-            # print(req, f)
             if _match_wildcard(req, f):
                 result.extend(self._check_s3_match(bucket, root, folder['Prefix'], params, level+1))
         return result
@@ -208,7 +206,6 @@ class Client(object):
                 params = group.copy()
                 params['year'] = year
                 params['day_of_year'] = day_of_year
-                matching_files += self._check_s3_match(self.waveform_bucket_name, self.waveform_dir,
                 matching_files += self._check_s3_match(self._get_bucket(params), self.waveform_dir,
                                                        prefix, params)
                 
@@ -233,7 +230,7 @@ class Client(object):
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
             return _fix_mseed_timing(mstl.traceids())
 
-        print('List files: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
+        # print('List files: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
         t0 = datetime.datetime.now()
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
             futures = [executor.submit(download_file, f)
@@ -242,7 +239,7 @@ class Client(object):
                 day_st = future.result()
                 st += day_st
 
-        print('Download: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
+        # print('Download: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
         st.trim(starttime, endtime)
 
         if len(st) > 0:
