@@ -19,7 +19,7 @@ def test_geonet_waveform_download():
     starttime = UTCDateTime("2025-08-20T20:59:00")
     endtime = UTCDateTime("2025-08-21T14:05:00")
 
-    stream = client.get_waveforms("NZ", "DCZ, JCZ", "10,?", "HH*, EH*",
+    stream = client.get_waveforms("NZ", "DCZ, JCZ", "10", "HH*, EH*",
                                   starttime, endtime, max_threads=4)
 
     assert len(stream) > 0, "No waveforms returned by GeoNet AWS client."
