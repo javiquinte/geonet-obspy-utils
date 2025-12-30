@@ -124,8 +124,8 @@ class Client(object):
                 result.extend(self._check_s3_match(bucket, root, folder['Prefix'], params, level+1))
         return result
 
-    def get_waveforms(self, network, station, location, channel, starttime,
-                      endtime, filename=None, max_threads=1):
+    def get_waveforms(self, network: str, station: str, location: str, channel: str, starttime: UTCDateTime,
+                      endtime: UTCDateTime, filename: str = None, max_threads: int = 1):
         """
         Fetch MiniSEED waveform data from AWS S3 bucket.
 
@@ -180,7 +180,6 @@ class Client(object):
             raise ValueError("starttime and endtime must be" +
                              " obspy.UTCDateTime objects")
 
-        st = Stream()
         current_time = starttime
 
         # Create all combinations of network, station, location, and channel
@@ -223,32 +222,51 @@ class Client(object):
 
         # We use mseedlib here because ObsPy does not apply timing correctly
         # when the sampling rate is not uniform with the dataloggers.
-        def download_file(file):
+        def read_file(file) -> Stream:
             mstl = MSTraceList()
             with tempfile.NamedTemporaryFile(delete=True) as tmp:
                 self._s3.download_file(self._get_bucket(params), file, tmp.name)
                 mstl.read_file(tmp.name, unpack_data=True, record_list=True)
             return _fix_mseed_timing(mstl.traceids())
 
+        def download_file(file) -> str:
+            """Download a file from the server and DO NOT delete it. Just return its name."""
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                self._s3.download_file(self._get_bucket(params), file, tmp.name)
+            return tmp.name
+
         # print('List files: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
         t0 = datetime.datetime.now()
+        if filename is None:
+            result = Stream()
+        else:
+            result = open(filename, 'wb')
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
-            futures = [executor.submit(download_file, f)
-                       for f in matching_files]
+            if filename is None:
+                futures = [executor.submit(read_file, f)
+                           for f in matching_files]
+            else:
+                futures = [executor.submit(download_file, f)
+                           for f in matching_files]
+            # Collect results
             for future in as_completed(futures):
                 day_st = future.result()
-                st += day_st
+                if filename is None:
+                    result += day_st
+                else:
+                    with open(day_st, 'r+b') as fin:
+                        result.write(fin.read())
+                    os.remove(day_st)
+
+        if filename is not None:
+            result.close()
+            return
 
         # print('Download: %.2f seconds' % ((datetime.datetime.now() - t0).seconds,))
-        st.trim(starttime, endtime)
+        result.trim(starttime, endtime)
 
-        if len(st) > 0:
-            if filename:
-                st.write(filename)
-                return None
-            else:
-                return st
-
+        if len(result) > 0:
+            return result
         else:
             raise IndexError("No waveforms found!")
 
